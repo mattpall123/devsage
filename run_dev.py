@@ -13,7 +13,7 @@ MAX_TOKENS = 10000  # Adjust as needed
 global_summaries = []
 
 def get_files_to_summarize(directory):
-    return [f for f in Path(directory).rglob("*") if f.suffix in ['.py', '.js', '.html', '.css']]
+    return [f for f in Path(directory).rglob("*") if f.is_file() and f.suffix in ['.py', '.js', '.html', '.css']]
 
 def summarize_batch(batch, client, prior_summaries=""):
     content = "\n\n".join(f"# {f.name}\n{f.read_text()}" for f in batch)

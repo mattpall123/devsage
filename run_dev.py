@@ -1,8 +1,10 @@
 # Token counting for tiktoken-aware batching
-# Token counting for tiktoken-aware batching
 import asyncio
 import httpx
 import tiktoken
+import re
+import hashlib
+import json
 
 encoding = tiktoken.encoding_for_model("gpt-4o")
 
@@ -18,6 +20,30 @@ from pathlib import Path
 load_dotenv()
 
 MAX_TOKENS = 10000  # Adjust as needed
+CACHE_DIR = ".devsage_cache"
+
+def get_file_hash(text):
+    return hashlib.sha256(text.encode('utf-8')).hexdigest()
+
+def load_cached_summary(file_hash):
+    cache_path = Path(CACHE_DIR) / f"{file_hash}.json"
+    if cache_path.exists():
+        with open(cache_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data.get("summary")
+    return None
+
+def save_cached_summary(file_hash, summary):
+    Path(CACHE_DIR).mkdir(exist_ok=True)
+    cache_path = Path(CACHE_DIR) / f"{file_hash}.json"
+    with open(cache_path, "w", encoding="utf-8") as f:
+        json.dump({"summary": summary}, f)
+
+def extract_definitions(text):
+    return "\n".join(
+        line for line in text.splitlines()
+        if re.match(r"^\s*(def|class)\s+\w+", line)
+    )
 
 def get_files_to_summarize(directory):
     excluded_dirs = {"node_modules", "venv", ".venv", "__pycache__"}
@@ -30,37 +56,47 @@ def get_files_to_summarize(directory):
 
 
 async def summarize_batch(batch, api_key, prior_summaries=""):
-    content = "\n\n".join(f"# {f.name}\n{f.read_text()}" for f in batch)
-    prompt = f"""
+    summaries = []
+    for f in batch:
+        text = f.read_text()
+        file_hash = get_file_hash(text)
+        cached_summary = load_cached_summary(file_hash)
+        if cached_summary:
+            summaries.append(f"# {f.name}\n{cached_summary}")
+        else:
+            content = extract_definitions(text) if f.suffix == '.py' else text
+            prompt = f"""
 You are analyzing one part of a larger software system.
 
 Previously summarized parts:
 {prior_summaries}
 
-Now, summarize this new batch of code files.
-- Focus on what this batch contributes to the system.
+Now, summarize this new code file.
+- Focus on what this file contributes to the system.
 - Do NOT repeat what was already described.
-- Group related files by functionality.
 - Emphasize newly introduced roles or logic.
 
-Batch content:
+File content:
+# {f.name}
 {content}
 """.strip()
-    url = "https://api.openai.com/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
-    }
-    json_data = {
-        "model": "gpt-4o-mini",
-        "messages": [{"role": "user", "content": prompt}]
-    }
-    async with httpx.AsyncClient() as client:
-        resp = await client.post(url, headers=headers, json=json_data, timeout=120)
-        resp.raise_for_status()
-        data = resp.json()
-        summary = data["choices"][0]["message"]["content"].strip()
-        return summary
+            url = "https://api.openai.com/v1/chat/completions"
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
+            }
+            json_data = {
+                "model": "gpt-3.5-turbo",
+                "messages": [{"role": "user", "content": prompt}]
+            }
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(url, headers=headers, json=json_data, timeout=120)
+                resp.raise_for_status()
+                data = resp.json()
+                summary = data["choices"][0]["message"]["content"].strip()
+                summaries.append(f"# {f.name}\n{summary}")
+                save_cached_summary(file_hash, summary)
+    return "\n\n".join(summaries)
 
 
 async def run_all_batches(files, api_key):

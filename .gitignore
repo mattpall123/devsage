@@ -1,0 +1,14 @@
+# Environment files
+.env
+.venv/
+venv/
+
+# Bytecode and caches
+__pycache__/
+*.py[cod]
+
+# VS Code settings
+.vscode/
+
+# OS metadata
+.DS_Store

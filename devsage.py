@@ -16,7 +16,7 @@ def main():
         print("❌ No supported source files found.")
         return
 
-    output_path = os.path.join(args.out, "README.md")
+    output_path = os.path.join(args.out, "DOCUMENTATION.md")
     with open(output_path, "w") as output_file:
         for file_path in source_files:
             print(f"📄 Processing: {file_path}")

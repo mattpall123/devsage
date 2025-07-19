@@ -1,3 +1,10 @@
+# Token counting for tiktoken-aware batching
+import tiktoken
+
+encoding = tiktoken.encoding_for_model("gpt-4o")
+
+def count_tokens(text):
+    return len(encoding.encode(text))
 # run_dev.py
 import os
 import sys
@@ -13,7 +20,13 @@ MAX_TOKENS = 10000  # Adjust as needed
 global_summaries = []
 
 def get_files_to_summarize(directory):
-    return [f for f in Path(directory).rglob("*") if f.is_file() and f.suffix in ['.py', '.js', '.html', '.css']]
+    excluded_dirs = {"node_modules", "venv", ".venv", "__pycache__"}
+    return [
+        f for f in Path(directory).rglob("*")
+        if f.is_file()
+        and f.suffix in ['.py', '.js', '.html', '.css']
+        and not any(part in excluded_dirs for part in f.parts)
+    ]
 
 def summarize_batch(batch, client, prior_summaries=""):
     content = "\n\n".join(f"# {f.name}\n{f.read_text()}" for f in batch)
@@ -53,13 +66,13 @@ batch, size = [], 0
 global_summaries = []
 for f in files:
     text = f.read_text()
-    if size + len(text) > MAX_TOKENS:
+    if size + count_tokens(text) > MAX_TOKENS:
         print(f"Summarizing {len(batch)} files...")
         summary = summarize_batch(batch, client, "\n".join(global_summaries))
         global_summaries.append(summary)
         batch, size = [], 0
     batch.append(f)
-    size += len(text)
+    size += count_tokens(text)
 
 if batch:
     print(f"Summarizing {len(batch)} files...")

@@ -7,12 +7,19 @@ import os
 load_dotenv()  # Load from .env
 
 def summarize_code(file_path, code):
-    prompt = f"""You are an AI assistant. Explain the following code clearly and concisely.
+    prompt = f"""\You are a senior software engineer and expert technical writer. Below is a raw concatenation of source code files from a single codebase. Your task is to generate professional, clear documentation that helps developers understand the project.
 
-Focus on:
-- The overall purpose
-- Key functions and classes
-- Structure and logic
+Instructions:
+- Determine the overall purpose of the project.
+- Group explanations by component, class, function, or logical section.
+- Describe key functions, methods, and modules, along with what they do and how they interact.
+- Skip boilerplate. Focus on meaningful logic and flow.
+- Include example usage if it can be inferred from the code.
+- Keep the documentation readable in a CLI (use Markdown-style formatting where helpful).
+- Do not repeat code unnecessarily — explain what it does.
+- Output in a format suitable for terminal or markdown viewer.
+
+Begin analysis of the code below:
 
 FILE: {file_path}
 

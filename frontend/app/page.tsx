@@ -3,7 +3,8 @@
 import type React from "react"
 
 import { useState, useCallback } from "react"
-import { Upload, Folder, File, ChevronRight, ChevronDown } from "lucide-react"
+import JSZip from "jszip"
+import { Upload, Folder, File as FileIcon, ChevronRight, ChevronDown } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -21,6 +22,7 @@ export default function Home() {
   const [isDragOver, setIsDragOver] = useState(false)
   const [fileTree, setFileTree] = useState<FileNode | null>(null)
   const [selectedFile, setSelectedFile] = useState<string | null>(null)
+  const [summary, setSummary] = useState<string | null>(null)
 
   const buildFileTree = (files: FileList): FileNode => {
     const root: FileNode = { name: "root", path: "", type: "folder", children: [] }
@@ -126,6 +128,35 @@ export default function Home() {
     }
   }
 
+  const handleGenerate = async () => {
+    if (!fileTree) return
+
+    const zip = new JSZip()
+
+    const addFilesToZip = (node: FileNode) => {
+      if (node.type === "file" && node.content) {
+        zip.file(node.path, node.content)
+      }
+      if (node.children) {
+        node.children.forEach(addFilesToZip)
+      }
+    }
+
+    addFilesToZip(fileTree)
+
+    const blob = await zip.generateAsync({ type: "blob" })
+    const formData = new FormData()
+    formData.append("project", new window.File([blob], "project.zip"))
+
+    const res = await fetch("http://localhost:8000/summarize", {
+      method: "POST",
+      body: formData,
+    })
+
+    const data = await res.json()
+    setSummary(data.summary)
+  }
+
   const FileTreeNode = ({ node, level = 0 }: { node: FileNode; level?: number }) => {
     const [isOpen, setIsOpen] = useState(level < 2)
 
@@ -138,7 +169,7 @@ export default function Home() {
           style={{ paddingLeft: `${level * 20 + 8}px` }}
           onClick={() => setSelectedFile(node.path)}
         >
-          <File className="h-4 w-4 text-blue-500" />
+          <FileIcon className="h-4 w-4 text-blue-500" />
           <span className="text-sm">{node.name}</span>
         </div>
       )
@@ -240,7 +271,7 @@ export default function Home() {
                   Project Structure
                 </CardTitle>
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => setFileTree(null)}>
+                  <Button variant="outline" size="sm" onClick={() => { setFileTree(null); setSummary(null); }}>
                     Upload New
                   </Button>
                 </div>
@@ -263,7 +294,7 @@ export default function Home() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  <Button className="w-full" disabled={!fileTree}>
+                  <Button className="w-full" disabled={!fileTree} onClick={handleGenerate}>
                     Generate Documentation
                   </Button>
                   <div className="pt-4 border-t">
@@ -271,6 +302,15 @@ export default function Home() {
                       Upload a project folder to generate comprehensive documentation using AI analysis.
                     </p>
                   </div>
+                  {summary && (
+                    <div className="pt-4 border-t">
+                      <textarea
+                        readOnly
+                        value={summary}
+                        className="w-full h-96 p-2 border rounded resize-none"
+                      />
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -279,7 +319,7 @@ export default function Home() {
             <Card className="lg:col-span-2">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <File className="h-5 w-5" />
+                  <FileIcon className="h-5 w-5" />
                   File Preview
                 </CardTitle>
                 <CardDescription>
@@ -297,7 +337,7 @@ export default function Home() {
                   ) : (
                     <div className="flex items-center justify-center h-full text-slate-500">
                       <div className="text-center">
-                        <File className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                        <FileIcon className="h-12 w-12 mx-auto mb-4 opacity-50" />
                         <p>Select a file from the project structure to view its content</p>
                       </div>
                     </div>

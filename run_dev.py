@@ -1,4 +1,7 @@
 # Token counting for tiktoken-aware batching
+# Token counting for tiktoken-aware batching
+import asyncio
+import httpx
 import tiktoken
 
 encoding = tiktoken.encoding_for_model("gpt-4o")
@@ -11,13 +14,10 @@ import sys
 from dotenv import load_dotenv
 import subprocess
 from pathlib import Path
-import openai
 
 load_dotenv()
 
-client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 MAX_TOKENS = 10000  # Adjust as needed
-global_summaries = []
 
 def get_files_to_summarize(directory):
     excluded_dirs = {"node_modules", "venv", ".venv", "__pycache__"}
@@ -28,9 +28,9 @@ def get_files_to_summarize(directory):
         and not any(part in excluded_dirs for part in f.parts)
     ]
 
-def summarize_batch(batch, client, prior_summaries=""):
-    content = "\n\n".join(f"# {f.name}\n{f.read_text()}" for f in batch)
 
+async def summarize_batch(batch, api_key, prior_summaries=""):
+    content = "\n\n".join(f"# {f.name}\n{f.read_text()}" for f in batch)
     prompt = f"""
 You are analyzing one part of a larger software system.
 
@@ -46,13 +46,50 @@ Now, summarize this new batch of code files.
 Batch content:
 {content}
 """.strip()
+    url = "https://api.openai.com/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    json_data = {
+        "model": "gpt-4o-mini",
+        "messages": [{"role": "user", "content": prompt}]
+    }
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(url, headers=headers, json=json_data, timeout=120)
+        resp.raise_for_status()
+        data = resp.json()
+        summary = data["choices"][0]["message"]["content"].strip()
+        return summary
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt}]
-    )
-    summary = response.choices[0].message.content.strip()
-    return summary
+
+async def run_all_batches(files, api_key):
+    batch, size = [], 0
+    global_summaries = []
+    batches = []
+    sizes = []
+    for f in files:
+        text = f.read_text()
+        tok = count_tokens(text)
+        if size + tok > MAX_TOKENS:
+            batches.append(list(batch))
+            sizes.append(size)
+            batch, size = [], 0
+        batch.append(f)
+        size += tok
+    if batch:
+        batches.append(list(batch))
+        sizes.append(size)
+
+    prior_summaries = ""
+    results = []
+    for idx, batch in enumerate(batches):
+        print(f"Summarizing {len(batch)} files...")
+        summary = await summarize_batch(batch, api_key, prior_summaries)
+        results.append(summary)
+        prior_summaries = "\n".join(results)
+    return results
+
 
 if len(sys.argv) != 2:
     print("Usage: python run_dev.py <target_directory>")
@@ -60,27 +97,15 @@ if len(sys.argv) != 2:
 
 target = sys.argv[1]
 
-# Run summarization in batches
-files = get_files_to_summarize(target)
-batch, size = [], 0
-global_summaries = []
-for f in files:
-    text = f.read_text()
-    if size + count_tokens(text) > MAX_TOKENS:
-        print(f"Summarizing {len(batch)} files...")
-        summary = summarize_batch(batch, client, "\n".join(global_summaries))
-        global_summaries.append(summary)
-        batch, size = [], 0
-    batch.append(f)
-    size += count_tokens(text)
+async def main():
+    files = get_files_to_summarize(target)
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY not set in environment.")
+    global_summaries = await run_all_batches(files, api_key)
 
-if batch:
-    print(f"Summarizing {len(batch)} files...")
-    summary = summarize_batch(batch, client, "\n".join(global_summaries))
-    global_summaries.append(summary)
-
-# Final synthesis step
-final_prompt = f"""
+    # Final synthesis step
+    final_prompt = f"""
 You are a senior developer writing documentation for a project composed of the following parts.
 
 Below are summaries of each code section. Based on this, write:
@@ -91,11 +116,22 @@ Below are summaries of each code section. Based on this, write:
 
 {"\n".join(global_summaries)}
 """
+    url = "https://api.openai.com/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    json_data = {
+        "model": "gpt-4o-mini",
+        "messages": [{"role": "user", "content": final_prompt}]
+    }
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(url, headers=headers, json=json_data, timeout=180)
+        resp.raise_for_status()
+        data = resp.json()
+        print("\n\n=== Final Project Overview ===\n")
+        print(data["choices"][0]["message"]["content"].strip())
 
-final_response = client.chat.completions.create(
-    model="gpt-4o-mini",
-    messages=[{"role": "user", "content": final_prompt}]
-)
 
-print("\n\n=== Final Project Overview ===\n")
-print(final_response.choices[0].message.content.strip())
+if __name__ == "__main__":
+    asyncio.run(main())

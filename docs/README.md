@@ -22,9 +22,6 @@ Project Sage is a full-stack tool that lets users upload an entire project folde
 - [Shadcn UI](https://ui.shadcn.com/) — component templates
 - [OpenAI GPT-4 Turbo](https://platform.openai.com/docs/models/gpt-4) — summarization engine
 
-## 📸 Screenshots
-
-![UI Screenshot](./screenshots/folder-uploader-demo.png)
 
 ## How It Works
 
@@ -37,10 +34,10 @@ Project Sage is a full-stack tool that lets users upload an entire project folde
    - The backend extracts files and uses OpenAI’s API to summarize logic.
 5. The frontend receives and displays a Markdown-style summary.
 
-## 📎 Setup Instructions
+## Setup Instructions
 
 
-### 🔧 Backend
+### Backend
 
 ```bash
 # In the project root (where main.py exists)

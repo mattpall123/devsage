@@ -92,8 +92,8 @@ async def run_all_batches(files, api_key):
         sizes.append(size)
 
     # Print batch sizes and estimated token counts before creating tasks
-    for i, (batch, token_count) in enumerate(zip(batches, sizes)):
-        print(f"Batch {i+1}: Summarizing {len(batch)} files... (estimated {token_count} tokens)")
+    #for i, (batch, token_count) in enumerate(zip(batches, sizes)):
+        #print(f"Batch {i+1}: Summarizing {len(batch)} files... (estimated {token_count} tokens)")
     # Create tasks for all batches with empty prior_summaries for parallelism
     tasks = [asyncio.create_task(summarize_batch(batch, api_key, "")) for batch in batches]
     results = await asyncio.gather(*tasks)

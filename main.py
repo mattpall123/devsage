@@ -21,8 +21,12 @@ async def summarize(project: UploadFile):
         with zipfile.ZipFile(zip_path, "r") as zip_ref:
             zip_ref.extractall(tmpdir)
 
+        # Use the virtual environment's Python executable
+        import sys
+        python_exe = sys.executable
+        
         result = subprocess.run(
-            ["python3", "run_dev.py", tmpdir],
+            [python_exe, "run_dev.py", tmpdir],
             capture_output=True,
             text=True
         )

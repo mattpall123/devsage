@@ -44,8 +44,15 @@ Project Sage is a full-stack tool that lets users upload an entire project folde
 
 ```bash
 # In the project root (where main.py exists)
+
+# macOS/Linux
 python3 -m venv venv
 source venv/bin/activate
+
+# Windows
+python -m venv venv
+venv\Scripts\activate
+
 pip install -r requirements.txt
 uvicorn main:app --reload --port 8000
 

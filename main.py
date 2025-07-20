@@ -1,7 +1,7 @@
 from fastapi import FastAPI, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 import zipfile, tempfile, subprocess, os
-
+import sys
 app = FastAPI()
 
 app.add_middleware(
@@ -22,7 +22,7 @@ async def summarize(project: UploadFile):
             zip_ref.extractall(tmpdir)
 
         # Use the virtual environment's Python executable
-        import sys
+    
         python_exe = sys.executable
         
         result = subprocess.run(
